@@ -43,6 +43,8 @@ int is_from_user_enum(struct sip_msg* _msg, str* _suffix, str* _service);
  */
 int enum_query(struct sip_msg* _msg, str* _suffix, str* _service, str* _num);
 
+int enum_server_query(struct sip_msg* _msg, str *server, str* _suffix, str* _service, str* _num);
+
 /*
  * Infrastructure ENUM versions.
  */

@@ -34,6 +34,7 @@
 #include "../../error.h"
 #include "../../mod_fix.h"
 #include "enum.h"
+#include "enum_resolver.h"
 
 
 
@@ -41,6 +42,7 @@
  * Module initialization function prototype
  */
 static int mod_init(void);
+static int cld_init(int pid);
 static int fixup_enum_suffix(void **param);
 static int fixup_enum_i_suffix(void **param);
 static int fixup_enum_isn_suffix(void **param);
@@ -79,6 +81,15 @@ str isnsuffix;
 
 static cmd_export_t cmds[] = {
 	{"enum_query", (cmd_function)enum_query, {
+		{CMD_PARAM_STR | CMD_PARAM_OPT | CMD_PARAM_FIX_NULL,
+			fixup_enum_suffix, 0},
+		{CMD_PARAM_STR | CMD_PARAM_OPT | CMD_PARAM_FIX_NULL,
+			fixup_enum_service, 0},
+		{CMD_PARAM_STR | CMD_PARAM_OPT, 0, 0}, {0, 0, 0}},
+		REQUEST_ROUTE},
+	{"enum_server_query", (cmd_function)enum_server_query, {
+		{CMD_PARAM_STR,
+			fixup_enum_suffix, 0},
 		{CMD_PARAM_STR | CMD_PARAM_OPT | CMD_PARAM_FIX_NULL,
 			fixup_enum_suffix, 0},
 		{CMD_PARAM_STR | CMD_PARAM_OPT | CMD_PARAM_FIX_NULL,
@@ -142,7 +153,7 @@ struct module_exports exports = {
 	mod_init, /* module initialization function */
 	0,        /* response function*/
 	0,        /* destroy function */
-	0,        /* per-child init function */
+	cld_init, /* per-child init function */
 	0         /* reload confirm function */
 };
 
@@ -172,6 +183,11 @@ static int mod_init(void)
 	isnsuffix.len = strlen(isn_suffix);
 
 	return 0;
+}
+
+static int cld_init(int pid)
+{
+	return init_enum_resolver();
 }
 
 static int fixup_enum_suffix(void **param)

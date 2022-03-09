@@ -32,6 +32,7 @@
 #include "../../dset.h"
 #include "../../qvalue.h"
 #include "enum_mod.h"
+#include "enum_resolver.h"
 #include "../../regexp.h"
 #include "../../pvar.h"
 #include "../../mod_fix.h"
@@ -534,18 +535,15 @@ static inline void naptr_sort(struct rdata** head)
  * Makes enum query on name.  On success, rewrites user part and
  * replaces Request-URI.
  */
-int do_query(struct sip_msg* _msg, char *user, char *name, str *service) {
-
+int parse_enum_response(struct sip_msg* _msg, char *user, char *name, str *service,
+                struct rdata* head) {
     char uri[MAX_URI_SIZE];
     char new_uri[MAX_URI_SIZE];
     unsigned int priority, curr_prio, first;
     qvalue_t q;
-    struct rdata* head;
     struct rdata* l;
     struct naptr_rdata* naptr;
     str pattern, replacement, result, new_result;
-
-    head = get_record(name, T_NAPTR);
 
     if (head == 0) {
 	LM_DBG("No NAPTR record found for %s.\n", name);
@@ -638,6 +636,100 @@ done:
     return first ? -1 : 1;
 }
 
+int do_query(struct sip_msg* _msg, char *user, char *name, str *service) {
+	return parse_enum_response(_msg, user, name, service, get_record(name, T_NAPTR));
+}
+
+int do_server_query(struct sip_msg* _msg, union sockaddr_union *su,
+	char *user, char *name, str *service) {
+	
+	return parse_enum_response(_msg, user, name, service,
+	get_enum_record(su, name));
+}
+
+int fixup_get_socket(str *s, union sockaddr_union *su)
+{
+	char *p;
+	int ret;
+	unsigned short port;
+	struct ip_addr *ipaddr;
+
+	/* check to see if we have a port specified */
+	p = memchr(s->s, ENUM_PORT_SEP, s->len);
+	if (p) {
+		ret = s->len - (p - s->s + 1);
+		port = str2s(p + 1, ret, &ret);
+		if (ret != 0) {
+			LM_ERR("Invalid port for socket <%.*s> - Using default %d\n",
+			s->len, s->s, DEFAULT_ENUM_PORT);
+			port = DEFAULT_ENUM_PORT;
+		}
+		s->len = p - s->s;
+	} else {
+		port = DEFAULT_ENUM_PORT;
+	}
+
+	LM_DBG("using enum server: %.*s:%hu\n", s->len, s->s, port);
+
+	//Convert server field to IP address
+	if (!(ipaddr = str2ip(s))) {
+		LM_ERR("cannot convert ip address %.*s\n", s->len, s->s);
+		return -1;
+	}
+
+	su->sin.sin_family = ipaddr->af;
+	su->sin.sin_port = htons(port);
+	memcpy(&su->sin.sin_addr, ipaddr->u.addr, ipaddr->len);
+
+	return 0;
+}
+
+int enum_server_query(struct sip_msg* _msg, str *server, str* _suffix, str* _service, str* _num)
+{
+	char *user_s;
+	int user_len, i, j;
+	char name[MAX_DOMAIN_SIZE];
+	char string[17];
+	union sockaddr_union *su, sock;
+
+	if (fixup_get_socket(server, &sock)) {
+		LM_ERR("cannot parse socket %.*s\n", server->len, server->s);
+		return -1;
+	}
+
+	su = &sock;
+
+	if (!_num) {
+		if (parse_sip_msg_uri(_msg) < 0) {
+			LM_ERR("Parsing of R-URI failed\n");
+			return -1;
+		}
+
+		_num = &_msg->parsed_uri.user;
+	}
+
+//	if (is_e164(_num) == -1) {
+//		LM_ERR("number %.*s is not in E164 format\n",_num->len,_num->s);
+//		return -1;
+//	}
+
+	user_s = _num->s;
+	user_len = _num->len;
+
+	memcpy(&(string[0]), user_s, user_len);
+	string[user_len] = (char)0;
+
+	j = 0;
+	for (i = user_len - 1; i > 0; i--) {
+		name[j] = user_s[i];
+		name[j + 1] = '.';
+		j = j + 2;
+	}
+
+	memcpy(name + j, _suffix->s, _suffix->len + 1);
+
+	return do_server_query(_msg, su, string, name, _service);
+}
 
 /*
  * See documentation in README file.
