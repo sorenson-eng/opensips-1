@@ -194,6 +194,9 @@ int resolv_init();
 int resolv_blacklist_init();
 
 
+struct naptr_rdata* dns_naptr_parser( unsigned char* msg, unsigned char* end,
+				  unsigned char* rdata);
+
 
 static inline struct proxy_l* shm_clone_proxy(struct proxy_l *sp,
 													unsigned int move_dn)
