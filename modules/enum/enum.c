@@ -720,7 +720,7 @@ int enum_server_query(struct sip_msg* _msg, str *server, str* _suffix, str* _ser
 	string[user_len] = (char)0;
 
 	j = 0;
-	for (i = user_len - 1; i > 0; i--) {
+	for (i = user_len - 1; i >= 0; i--) {
 		name[j] = user_s[i];
 		name[j + 1] = '.';
 		j = j + 2;
